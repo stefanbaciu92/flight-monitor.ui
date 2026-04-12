@@ -334,3 +334,33 @@ body {
   .two-col-grid { grid-template-columns: 1fr; }
   .page { padding: 30px 16px 60px; }
 }
+
+/* ── IATA auto-fill ───────────────────────────────────────── */
+.iata-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.iata-input-wrap input { flex: 1; }
+
+.iata-input-wrap input.iata-loading {
+  opacity: 0.55;
+  cursor: not-allowed;
+  border-color: rgba(167,139,250,0.5);
+}
+
+.iata-spinner {
+  position: absolute;
+  right: 12px;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(167,139,250,0.3);
+  border-top-color: rgba(167,139,250,1);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
