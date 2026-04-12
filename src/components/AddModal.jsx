@@ -3,28 +3,39 @@ import { useState, useRef } from 'react'
 const API = 'http://178.104.173.131:7070'
 
 export default function AddModal({ onClose, onSubmit }) {
-  const [name, setName]           = useState('')
-  const [airports, setAirports]   = useState('')
-  const [baseline, setBaseline]   = useState('200')
-  const [loading, setLoading]     = useState(false)
+  const [name, setName]               = useState('')
+  const [airports, setAirports]       = useState('')
+  const [baseline, setBaseline]       = useState('200')
+  const [loading, setLoading]         = useState(false)
   const [iataLoading, setIataLoading] = useState(false)
-  const [error, setError]         = useState('')
+  const [error, setError]             = useState('')
   const iataRef = useRef(null)
+
+  // Derived: parse airports string into clean array
+  const iataList = airports
+    .split(',')
+    .map(a => a.trim().toUpperCase())
+    .filter(a => a.length > 0)
+
+  const removeIata = (code) => {
+    const updated = iataList.filter(a => a !== code)
+    setAirports(updated.join(', '))
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
-    if (!name.trim())     { setError('Destination name is required'); return }
-    if (!airports.trim()) { setError('At least one airport code is required'); return }
+    if (!name.trim())        { setError('Destination name is required'); return }
+    if (iataList.length < 1) { setError('At least one airport code is required'); return }
 
     setLoading(true)
     try {
       await onSubmit({
-        name:     name.trim(),
-        airports: airports.split(',').map(a => a.trim().toUpperCase()).filter(Boolean),
-        baseline: parseFloat(baseline) || 200,
-        flag:     '✈️',
-        zbordirect_slug: null
+        name:            name.trim(),
+        airports:        iataList,
+        baseline:        parseFloat(baseline) || 200,
+        flag:            '✈️',
+        zbordirect_slug: null,
       })
     } catch (err) {
       setError(err.message)
@@ -33,12 +44,12 @@ export default function AddModal({ onClose, onSubmit }) {
   }
 
   const handleIataFocus = async () => {
-    if (!name.trim() || airports.trim()) return   // skip if no name or already filled
+    if (!name.trim() || airports.trim()) return
     setIataLoading(true)
     try {
       const res  = await fetch(`${API}/airports?query=${encodeURIComponent(name.trim())}`)
       const data = await res.json()
-      if (data.iata_codes && data.iata_codes.length > 0) {
+      if (data.iata_codes?.length > 0) {
         setAirports(data.iata_codes.join(', '))
       } else {
         setError(`No airports found for "${name.trim()}"`)
@@ -69,12 +80,31 @@ export default function AddModal({ onClose, onSubmit }) {
           </div>
 
           <div className="modal-field">
-            <label>IATA Airport codes (comma separated)</label>
+            <label>IATA Airport codes</label>
+
+            {/* Tag chips */}
+            {iataList.length > 0 && (
+              <div className="iata-tags">
+                {iataList.map(code => (
+                  <span key={code} className="iata-tag">
+                    {code}
+                    <button
+                      type="button"
+                      className="iata-tag-remove"
+                      onClick={() => removeIata(code)}
+                      aria-label={`Remove ${code}`}
+                    >×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Text input */}
             <div className="iata-input-wrap">
               <input
                 ref={iataRef}
                 type="text"
-                placeholder={iataLoading ? 'Searching airports…' : 'Click to auto-fill from destination name'}
+                placeholder={iataLoading ? 'Searching airports…' : 'Click to auto-fill, or type manually'}
                 value={airports}
                 onChange={e => setAirports(e.target.value)}
                 onFocus={handleIataFocus}
