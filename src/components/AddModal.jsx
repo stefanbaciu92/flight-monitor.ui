@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 const API = 'http://178.104.173.131:7070'
 
@@ -55,14 +55,19 @@ const COUNTRY_CAPITALS = {
 export default function AddModal({ onClose, onSubmit }) {
   const [name, setName]               = useState('')
   const [airports, setAirports]       = useState('')
-  const [baseline, setBaseline]       = useState('200')
+  const [baseline, setBaseline]       = useState('')
   const [loading, setLoading]         = useState(false)
   const [iataLoading, setIataLoading] = useState(false)
   const [iataAttempted, setIataAttempted] = useState(false)
   const [iataNotFound, setIataNotFound]   = useState(false)
   const [capitalHint, setCapitalHint]     = useState(null)
+  const [priceLoading, setPriceLoading]   = useState(false)
+  const [priceEstimated, setPriceEstimated] = useState(false)
+  const [priceManual, setPriceManual]     = useState(false)
   const [error, setError]             = useState('')
-  const iataRef = useRef(null)
+  const iataRef    = useRef(null)
+  const priceRef   = useRef(null)
+  const estimatingFor = useRef('')   // tracks which airport string we last estimated
 
   const iataList = airports
     .split(',')
@@ -74,12 +79,38 @@ export default function AddModal({ onClose, onSubmit }) {
     setAirports(updated.join(', '))
   }
 
+  // Auto-estimate baseline whenever a stable set of IATA codes is present
+  useEffect(() => {
+    const normalised = iataList.join(',')
+    if (!normalised || normalised === estimatingFor.current || priceManual) return
+    if (priceLoading || iataLoading) return
+
+    estimatingFor.current = normalised
+    setPriceLoading(true)
+    setPriceEstimated(false)
+
+    fetch(`${API}/price-estimate?airports=${encodeURIComponent(normalised)}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.price != null) {
+          setBaseline(String(d.price))
+          setPriceEstimated(true)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setPriceLoading(false))
+  }, [airports])   // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleNameChange = (e) => {
     setName(e.target.value)
     setAirports('')
     setIataAttempted(false)
     setIataNotFound(false)
     setCapitalHint(null)
+    setBaseline('')
+    setPriceEstimated(false)
+    setPriceManual(false)
+    estimatingFor.current = ''
     setError('')
   }
 
@@ -93,7 +124,6 @@ export default function AddModal({ onClose, onSubmit }) {
     const trimmed = name.trim()
     const capital = COUNTRY_CAPITALS[trimmed.toLowerCase()]
     const query   = capital || trimmed
-
     if (capital) setCapitalHint(capital)
 
     try {
@@ -112,11 +142,18 @@ export default function AddModal({ onClose, onSubmit }) {
     }
   }
 
+  const handleBaselineChange = (e) => {
+    setBaseline(e.target.value)
+    setPriceManual(true)
+    setPriceEstimated(false)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     if (!name.trim())        { setError('Destination name is required'); return }
     if (iataList.length < 1) { setError('At least one airport code is required'); return }
+    if (!baseline)           { setError('Baseline price is required'); return }
 
     setLoading(true)
     try {
@@ -179,7 +216,7 @@ export default function AddModal({ onClose, onSubmit }) {
                                  'Click to auto-fill, or type manually'
                 }
                 value={airports}
-                onChange={e => setAirports(e.target.value)}
+                onChange={e => { setAirports(e.target.value); setPriceManual(false); estimatingFor.current = '' }}
                 onFocus={handleIataFocus}
                 disabled={iataLoading}
                 className={iataLoading ? 'iata-loading' : ''}
@@ -188,19 +225,12 @@ export default function AddModal({ onClose, onSubmit }) {
             </div>
 
             {capitalHint && !iataNotFound && (
-              <p style={{
-                fontSize: '0.75rem', marginTop: '6px',
-                color: 'rgba(167,139,250,0.9)',
-              }}>
+              <p style={{ fontSize: '0.75rem', marginTop: '6px', color: 'rgba(167,139,250,0.9)' }}>
                 Country detected — showing airports for {capitalHint}
               </p>
             )}
-
             {iataNotFound && (
-              <p style={{
-                fontSize: '0.75rem', marginTop: '6px',
-                color: 'rgba(251,191,36,0.85)',
-              }}>
+              <p style={{ fontSize: '0.75rem', marginTop: '6px', color: 'rgba(251,191,36,0.85)' }}>
                 No airports found for "{capitalHint || name.trim()}" — enter codes manually above
               </p>
             )}
@@ -208,19 +238,44 @@ export default function AddModal({ onClose, onSubmit }) {
 
           <div className="modal-field">
             <label>Baseline price (€)</label>
-            <input
-              type="number"
-              placeholder="200"
-              value={baseline}
-              onChange={e => setBaseline(e.target.value)}
-              min="1"
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                ref={priceRef}
+                type="number"
+                placeholder={priceLoading ? 'Estimating from live prices…' : 'e.g. 200'}
+                value={baseline}
+                onChange={handleBaselineChange}
+                min="1"
+                disabled={priceLoading}
+                style={{ paddingRight: priceLoading ? '36px' : undefined }}
+              />
+              {priceLoading && (
+                <span style={{
+                  position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+                  width: '14px', height: '14px', borderRadius: '50%',
+                  border: '2px solid rgba(167,139,250,0.25)',
+                  borderTopColor: 'rgba(167,139,250,1)',
+                  animation: 'spin 0.8s linear infinite',
+                  display: 'inline-block',
+                }} />
+              )}
+            </div>
+            {priceEstimated && !priceLoading && (
+              <p style={{ fontSize: '0.75rem', marginTop: '6px', color: 'rgba(134,239,172,0.9)' }}>
+                ✓ Average from live Ryanair prices — you can adjust this
+              </p>
+            )}
+            {!priceEstimated && !priceLoading && iataList.length > 0 && baseline && priceManual && (
+              <p style={{ fontSize: '0.75rem', marginTop: '6px', color: 'rgba(148,163,184,0.8)' }}>
+                Set manually
+              </p>
+            )}
           </div>
 
           {error && <div className="modal-error">{error}</div>}
 
           <div className="modal-actions">
-            <button type="submit" className="modal-submit" disabled={loading || iataLoading}>
+            <button type="submit" className="modal-submit" disabled={loading || iataLoading || priceLoading}>
               {loading ? 'Adding…' : 'Add destination'}
             </button>
             <button type="button" className="modal-cancel" onClick={onClose}>
