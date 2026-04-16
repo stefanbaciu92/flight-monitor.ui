@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 
-const API = 'http://178.104.173.131:7070'
+const API = 'https://linariaskc.com'
 
 // Country name (lowercase) → capital city for IATA lookup
 const COUNTRY_CAPITALS = {
