@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="330" height="114" viewBox="0 0 330 114">
+  <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;800&amp;display=swap');</style>
+  </defs>
+  <rect width="330" height="114" fill="white"/>
+  <text x="0" y="62" font-family="Figtree, sans-serif" font-size="72" font-weight="800" fill="#6a0dad">Linaria</text>
+  <g fill="#facc15" transform="translate(288,38) rotate(-18) scale(0.52)">
+    <path d="M 55,0 C 52,-7 42,-10 25,-10 L -50,-6 C -57,-3 -60,0 -60,0 C -57,3 -50,6 25,10 C 42,10 52,7 55,0 Z"/>
+    <path d="M 15,10 C 0,18 -18,36 -48,62 L -53,58 C -24,32 -2,14 11,12 Z"/>
+    <path d="M -4,36 C -4,31 -14,29 -24,31 C -32,34 -32,40 -24,43 C -14,45 -4,43 -4,38 Z"/>
+    <path d="M -50,-6 C -52,-14 -54,-28 -55,-40 C -56,-46 -60,-45 -59,-39 C -58,-30 -57,-18 -56,-8 Z"/>
+    <path d="M -54,6 C -56,13 -59,24 -65,34 C -67,38 -65,41 -62,38 C -57,29 -55,18 -54,9 Z"/>
+  </g>
+  <text x="2" y="96" font-family="Figtree, sans-serif" font-size="18" font-weight="400" fill="#7c3aed" letter-spacing="0.5">Never miss a deal</text>
+</svg>

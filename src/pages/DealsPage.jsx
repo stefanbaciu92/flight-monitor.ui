@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import DealCard from '../components/DealCard'
 import { useAuth } from '../context/AuthContext'
+import PlanetLoader from '../components/PlanetLoader'
 
 const API       = 'https://linariaskc.com'
 const CACHE_KEY = 'flight-deals-cache'
@@ -151,21 +152,11 @@ export default function DealsPage({ airportVersion = 0 }) {
               ))}
             </div>
           </div>
-          {running && (
-            <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '50%', border: '3px solid rgba(167,139,250,0.25)', borderTopColor: 'rgba(167,139,250,1)', animation: 'spin 0.8s linear infinite' }} />
-              <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.95rem', fontWeight: 600, textShadow: '0 2px 12px rgba(0,0,0,0.5)' }}>Searching for deals...</p>
-            </div>
-          )}
+          {running && <PlanetLoader />}
         </div>
       )}
 
-      {deals.length === 0 && running && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', paddingTop: '60px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '50%', border: '3px solid rgba(167,139,250,0.25)', borderTopColor: 'rgba(167,139,250,1)', animation: 'spin 0.8s linear infinite' }} />
-          <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.95rem', fontWeight: 600 }}>Searching for deals...</p>
-        </div>
-      )}
+      {deals.length === 0 && running && <PlanetLoader />}
     </div>
   )
 }
