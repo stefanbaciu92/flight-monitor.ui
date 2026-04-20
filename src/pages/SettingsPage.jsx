@@ -54,12 +54,12 @@ const S = {
   heading: {
     fontSize: "1.6rem",
     fontWeight: 700,
-    color: "rgba(255,255,255,0.95)",
+    color: "#ffffff",
     margin: "0 0 4px",
   },
   subheading: {
     fontSize: "0.85rem",
-    color: "rgba(255,255,255,0.45)",
+    color: "#ffffff",
     margin: 0,
   },
   card: {
@@ -891,13 +891,15 @@ export default function SettingsPage({ onDepartureAirportSaved, navigate }) {
   const [departureAirport, setDepartureAirport] = useState("")
   const [cronExpr, setCronExpr]                 = useState("0 */6 * * *")
   const [scheduledHour, setScheduledHour]       = useState(9)
-  const [emailEnabled, setEmailEnabled]         = useState(false)
-  const [tgEnabled, setTgEnabled]               = useState(false)
   const [botToken, setBotToken]                 = useState("")
   const [chatId, setChatId]                     = useState("")
+  const [notifInapp, setNotifInapp]             = useState(false)
+  const [notifTelegram, setNotifTelegram]       = useState(false)
   const [saving, setSaving]                     = useState(false)
   const [toast, setToast]                       = useState(null) // { type, text }
   const [showTgSetup, setShowTgSetup]           = useState(false)
+
+  const tgConnected = !!(botToken && chatId)
 
   // Load settings on mount
   useEffect(() => {
@@ -909,10 +911,10 @@ export default function SettingsPage({ onDepartureAirportSaved, navigate }) {
         if (SUB_DAILY.includes(d.cron_expr)) {
           setScheduledHour(utcToLocal(d.scheduled_hour ?? 9))
         }
-        setEmailEnabled(!!d.email_enabled)
-        setTgEnabled(!!d.telegram_enabled)
         setBotToken(d.bot_token || "")
         setChatId(d.chat_id || "")
+        setNotifInapp(!!d.notif_inapp)
+        setNotifTelegram(!!d.notif_telegram)
       })
       .catch(() => {})
   }, [])
@@ -928,12 +930,12 @@ export default function SettingsPage({ onDepartureAirportSaved, navigate }) {
     setSaving(true)
     try {
       const body = {
-        cron_expr:        cronExpr,
-        scheduled_hour:   SUB_DAILY.includes(cronExpr) ? localToUtc(scheduledHour) : null,
-        email_enabled:    emailEnabled,
-        telegram_enabled: tgEnabled,
-        bot_token:        botToken,
-        chat_id:          chatId,
+        cron_expr:      cronExpr,
+        scheduled_hour: SUB_DAILY.includes(cronExpr) ? localToUtc(scheduledHour) : null,
+        bot_token:      botToken,
+        chat_id:        chatId,
+        notif_inapp:    notifInapp    ? 1 : 0,
+        notif_telegram: notifTelegram ? 1 : 0,
       }
       const res = await authFetch(`${API}/settings`, {
         method:  "PUT",
@@ -954,6 +956,13 @@ export default function SettingsPage({ onDepartureAirportSaved, navigate }) {
 
   function handleTgComplete(newChatId) {
     setChatId(newChatId)
+    setNotifTelegram(true)
+    // Persist telegram on + new chat_id immediately
+    authFetch(`${API}/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: newChatId, notif_telegram: 1 }),
+    }).catch(() => {})
     setShowTgSetup(false)
     setToast({ type: "ok", text: "✅ Telegram connected successfully!" })
   }
@@ -1050,100 +1059,72 @@ export default function SettingsPage({ onDepartureAirportSaved, navigate }) {
 
         {/* ── Card 3: Notifications ── */}
         <div style={S.card}>
-          <p style={S.cardTitle}>Notifications</p>
+          <p style={{ ...S.cardTitle, color: "#ffffff" }}>🔔 Notifications</p>
 
-          {/* Email toggle */}
-          <div style={S.toggleRow}>
-            <span style={S.toggleLabel}>Email</span>
+          {/* In-app notifications row */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+            <div>
+              <p style={{ margin: 0, fontSize: "0.88rem", color: "#ffffff", fontWeight: 600 }}>In-app notifications</p>
+              <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "rgba(255,255,255,0.4)" }}>Show alerts in the notification bell</p>
+            </div>
             <button
-              style={S.toggle(emailEnabled)}
-              onClick={() => setEmailEnabled((v) => !v)}
-              aria-label="Toggle email notifications"
+              onClick={() => setNotifInapp(v => !v)}
+              style={S.toggle(notifInapp)}
+              aria-label="Toggle in-app notifications"
             >
-              <div style={S.toggleKnob(emailEnabled)} />
+              <div style={S.toggleKnob(notifInapp)} />
             </button>
           </div>
 
           <div style={S.divider} />
 
-          {/* Telegram toggle */}
-          <div style={S.toggleRow}>
-            <span style={S.toggleLabel}>Telegram</span>
+          {/* Telegram row */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, marginTop: 16 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <p style={{ margin: 0, fontSize: "0.88rem", color: "#ffffff", fontWeight: 600 }}>Telegram</p>
+                <span style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.4)" }}>(Beta)</span>
+                {tgConnected && (
+                  <span style={{
+                    fontSize: "0.72rem", fontWeight: 700,
+                    color: "rgba(16,185,129,0.9)",
+                    background: "rgba(16,185,129,0.12)",
+                    border: "1px solid rgba(16,185,129,0.3)",
+                    borderRadius: 20, padding: "2px 8px",
+                  }}>
+                    ✓ Connected
+                  </span>
+                )}
+              </div>
+              <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "rgba(255,255,255,0.4)" }}>
+                {tgConnected ? "Send deal alerts to your Telegram bot" : "Not configured yet"}
+              </p>
+            </div>
             <button
-              style={S.toggle(tgEnabled)}
-              onClick={() => setTgEnabled((v) => !v)}
+              onClick={() => tgConnected && setNotifTelegram(v => !v)}
+              disabled={!tgConnected}
+              style={{
+                ...S.toggle(notifTelegram && tgConnected),
+                opacity: tgConnected ? 1 : 0.35,
+                cursor: tgConnected ? "pointer" : "not-allowed",
+              }}
               aria-label="Toggle Telegram notifications"
             >
-              <div style={S.toggleKnob(tgEnabled)} />
+              <div style={S.toggleKnob(notifTelegram && tgConnected)} />
             </button>
           </div>
 
-          {/* Subtitle + "How to set up" link */}
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 20,
-            marginTop: -10,
-          }}>
-            <p style={{
-              fontSize: "0.82rem",
-              color: "rgba(255,255,255,0.55)",
-              margin: 0,
-            }}>
-              Telegram (Beta)
-            </p>
-            <button
-              onClick={() => setShowTgSetup(true)}
-              style={{
-                background: "none",
-                border: "none",
-                color: "rgba(139,92,246,0.9)",
-                fontSize: "0.78rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                padding: 0,
-              }}
-            >
-              How to set up →
-            </button>
-          </div>
-
-          {tgEnabled && (
-            <>
-              <label style={S.label}>Bot token</label>
-              <input
-                value={botToken}
-                onChange={(e) => setBotToken(e.target.value)}
-                placeholder="Paste your BotFather token"
-                style={{
-                  ...S.input,
-                  fontFamily: "monospace",
-                  fontSize: "0.82rem",
-                  marginBottom: 14,
-                }}
-              />
-
-              <label style={S.label}>Chat ID</label>
-              <input
-                value={chatId}
-                onChange={(e) => setChatId(e.target.value)}
-                placeholder="Your Telegram chat ID"
-                style={{
-                  ...S.input,
-                  fontFamily: "monospace",
-                  fontSize: "0.82rem",
-                }}
-              />
-              <p style={S.hint}>
-                Run{" "}
-                <code style={{ fontFamily: "monospace", color: "rgba(139,92,246,0.8)" }}>
-                  /start
-                </code>{" "}
-                in your bot to get your chat ID automatically.
-              </p>
-            </>
-          )}
+          <button
+            onClick={() => setShowTgSetup(true)}
+            style={{
+              ...S.btn,
+              background: tgConnected ? "rgba(255,255,255,0.08)" : "rgba(139,92,246,0.8)",
+              border: tgConnected ? "1px solid rgba(255,255,255,0.18)" : "none",
+              color: tgConnected ? "rgba(255,255,255,0.75)" : "#fff",
+            }}
+          >
+            {tgConnected ? "Reset Telegram bot" : "Help me set up Telegram Alerts"}
+          </button>
         </div>
 
         {/* Save button */}
