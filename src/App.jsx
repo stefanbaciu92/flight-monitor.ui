@@ -5,6 +5,7 @@ import CompleteProfilePage from "./pages/CompleteProfilePage"
 import DealsPage from "./pages/DealsPage"
 import DestinationsPage from "./pages/DestinationsPage"
 import SettingsPage from "./pages/SettingsPage"
+import PlanetLoader from "./components/PlanetLoader"
 import "./App.css"
 
 const S = {
@@ -48,6 +49,177 @@ const S = {
     alignItems: "center", justifyContent: "center",
   },
   loadDot: { color: "rgba(255,255,255,0.5)", fontSize: "1rem" },
+}
+
+const API = "https://linariaskc.com"
+const NOTIF_POLL_MS = 60_000
+
+function NotificationBell({ transitioning, navigate }) {
+  const { authFetch } = useAuth()
+  const [notifs,    setNotifs]    = useState([])
+  const [open,      setOpen]      = useState(false)
+  const [justMarked, setJustMarked] = useState(new Set())
+  const panelRef    = useRef(null)
+  const pollRef     = useRef(null)
+
+  // Fetch notifications
+  async function fetchNotifs() {
+    try {
+      const res  = await authFetch(`${API}/notifications`)
+      const data = await res.json()
+      setNotifs(data.notifications || [])
+    } catch {}
+  }
+
+  // Initial fetch + polling
+  useEffect(() => {
+    fetchNotifs()
+    pollRef.current = setInterval(fetchNotifs, NOTIF_POLL_MS)
+    return () => clearInterval(pollRef.current)
+  }, [])
+
+  // Close panel on outside click
+  useEffect(() => {
+    function handleClick(e) {
+      if (panelRef.current && !panelRef.current.contains(e.target)) {
+        if (open) closePanel()
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [open])
+
+  function openPanel() {
+    // Mark which ones were unread when we opened — these get highlight while panel is open
+    const unreadIds = new Set(notifs.filter(n => !n.read).map(n => n.id))
+    setJustMarked(unreadIds)
+    setOpen(true)
+    // Tell backend to mark all as read
+    authFetch(`${API}/notifications/read`, { method: "PUT" }).catch(() => {})
+    // Optimistically update local state
+    setNotifs(ns => ns.map(n => ({ ...n, read: true })))
+  }
+
+  function closePanel() {
+    setOpen(false)
+    setJustMarked(new Set())  // clear highlights when panel closes
+  }
+
+  function togglePanel() {
+    if (open) closePanel()
+    else openPanel()
+  }
+
+  const unreadCount = notifs.filter(n => !n.read).length
+
+  function formatNotif(n) {
+    try {
+      const d   = new Date(n.created_at)
+      const hr  = String(d.getUTCHours()).padStart(2, "0")
+      const min = String(d.getUTCMinutes()).padStart(2, "0")
+      const day = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })
+      return `Deals search executed at ${hr}:${min} on ${day}`
+    } catch {
+      return "Deals search executed"
+    }
+  }
+
+  if (transitioning) return null
+
+  return (
+    <div ref={panelRef} style={{ position: "fixed", top: 72, right: 20, zIndex: 200 }}>
+      {/* Bell button */}
+      <button
+        onClick={togglePanel}
+        aria-label="Notifications"
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          width: 44, height: 44, position: "relative",
+          background: open ? "rgba(139,92,246,0.3)" : "rgba(255,255,255,0.15)",
+          backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+          border: "1px solid rgba(255,255,255,0.32)", borderRadius: 12,
+          cursor: "pointer", boxShadow: "0 4px 18px rgba(0,0,0,0.22)",
+          transition: "background 0.2s",
+        }}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="rgba(255,255,255,0.88)" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2.25a1 1 0 0 1 1 1v.764A7.003 7.003 0 0 1 19 11v4.5l1.707 1.707A1 1 0 0 1 20 19H4a1 1 0 0 1-.707-1.707L5 15.5V11A7.003 7.003 0 0 1 11 4.014V3.25a1 1 0 0 1 1-1Z"/>
+          <path d="M10 20h4a2 2 0 0 1-4 0Z"/>
+        </svg>
+        {unreadCount > 0 && (
+          <span style={{
+            position: "absolute", top: -5, right: -5,
+            background: "#ef4444", color: "white",
+            fontSize: "0.65rem", fontWeight: 800,
+            borderRadius: "999px", minWidth: 17, height: 17,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "0 4px", lineHeight: 1,
+            boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+          }}>
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {/* Dropdown panel */}
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 8px)", right: 0,
+          width: 300, maxHeight: 380, overflowY: "auto",
+          background: "rgba(20,8,48,0.96)", backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          border: "1px solid rgba(255,255,255,0.15)",
+          borderRadius: 14, padding: "8px 0",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
+        }}>
+          <p style={{
+            color: "rgba(255,255,255,0.5)", fontSize: "0.72rem",
+            fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase",
+            padding: "6px 16px 10px", margin: 0,
+          }}>
+            Notifications
+          </p>
+
+          {notifs.length === 0 ? (
+            <p style={{
+              color: "rgba(255,255,255,0.35)", fontSize: "0.83rem",
+              textAlign: "center", padding: "16px 16px 20px", margin: 0,
+            }}>
+              No notifications yet
+            </p>
+          ) : (
+            notifs.map(n => {
+              const highlight = justMarked.has(n.id)
+              return (
+                <div
+                  key={n.id}
+                  onClick={() => { closePanel(); navigate("deals") }}
+                  style={{
+                    margin: "2px 8px", padding: "10px 12px",
+                    borderRadius: 9, cursor: "pointer",
+                    background: highlight ? "rgba(139,92,246,0.18)" : "transparent",
+                    border: highlight
+                      ? "1px solid rgba(139,92,246,0.45)"
+                      : "1px solid transparent",
+                    transition: "background 0.2s, border 0.2s",
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.07)"}
+                  onMouseLeave={e => e.currentTarget.style.background = highlight ? "rgba(139,92,246,0.18)" : "transparent"}
+                >
+                  <p style={{
+                    color: "rgba(255,255,255,0.85)", fontSize: "0.82rem",
+                    margin: 0, lineHeight: 1.4,
+                  }}>
+                    🔍 {formatNotif(n)}
+                  </p>
+                </div>
+              )
+            })
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function NavMenu({ page, navigate, onLogout, user }) {
@@ -102,9 +274,17 @@ function NavMenu({ page, navigate, onLogout, user }) {
 function AppShell() {
   const { user, logout } = useAuth()
   const [page, setPage]                     = useState("deals")
+  const [transitioning, setTransitioning]   = useState(false)
   const [airportVersion, setAirportVersion] = useState(0)
   // "firstVisit" overlay for destinations page when user just activated
   const [showDestOverlay, setShowDestOverlay] = useState(false)
+
+  function navigate(newPage) {
+    if (newPage === page) return
+    setTransitioning(true)
+    setPage(newPage)
+    setTimeout(() => setTransitioning(false), 2000)
+  }
 
   // When user just activated (active changed 0→1), navigate to destinations and show overlay
   const prevActiveRef = useRef(null)
@@ -146,30 +326,37 @@ function AppShell() {
     }}>
       <div className="overlay" />
 
-      <NavMenu
-        page={page}
-        navigate={setPage}
-        onLogout={logout}
-        user={user}
-      />
+      {!transitioning && (
+        <NavMenu
+          page={page}
+          navigate={navigate}
+          onLogout={logout}
+          user={user}
+        />
+      )}
 
-      {page === "deals" && (
+      <NotificationBell transitioning={transitioning} navigate={navigate} />
+
+      {transitioning && <PlanetLoader />}
+
+      {!transitioning && page === "deals" && (
         <DealsPage airportVersion={airportVersion} />
       )}
-      {page === "destinations" && (
+      {!transitioning && page === "destinations" && (
         <DestinationsPage
           showFirstVisitOverlay={showDestOverlay}
           onOverlayDismissed={() => setShowDestOverlay(false)}
         />
       )}
-      {page === "settings" && (
+      {!transitioning && page === "settings" && (
         <SettingsPage
           onDepartureAirportSaved={() => setAirportVersion(v => v + 1)}
+          navigate={navigate}
         />
       )}
 
       {/* Destinations first-visit overlay */}
-      {showDestOverlay && page === "destinations" && (
+      {!transitioning && showDestOverlay && page === "destinations" && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 500,
           background: "rgba(10,4,30,0.75)", backdropFilter: "blur(6px)",

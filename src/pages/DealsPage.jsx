@@ -6,6 +6,7 @@ import PlanetLoader from '../components/PlanetLoader'
 const API       = 'https://linariaskc.com'
 const CACHE_KEY = 'flight-deals-cache'
 const MIN_MS    = 5000
+const POLL_MS   = 60_000  // silent background poll interval
 
 function formatLastAlert(deals) {
   if (!deals.length) return null
@@ -31,7 +32,12 @@ export default function DealsPage({ airportVersion = 0 }) {
   const [running, setRunning]       = useState(false)
   const [triggerMsg, setTriggerMsg] = useState(null)
   const [destImages, setDestImages]   = useState({})
-  const isFirstRender = useRef(true)
+  const isFirstRender  = useRef(true)
+  const latestSentAtMs = useRef(0)   // tracks newest deal timestamp for silent poll
+  const runningRef     = useRef(false)
+
+  // Keep refs in sync with state (avoids stale closures in the poll interval)
+  useEffect(() => { runningRef.current = running }, [running])
 
   // Clear deals when departure airport changes
   useEffect(() => {
@@ -48,6 +54,7 @@ export default function DealsPage({ airportVersion = 0 }) {
     ]).then(([dealsData, destData]) => {
       const fresh = dealsData.deals || []
       if (fresh.length > 0) {
+        latestSentAtMs.current = new Date(fresh[0].sent_at).getTime()
         setDeals(fresh)
         localStorage.setItem(CACHE_KEY, JSON.stringify(fresh))
       }
@@ -59,6 +66,25 @@ export default function DealsPage({ airportVersion = 0 }) {
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
+
+  // Silent background poll — updates deals if cron has written newer data
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (runningRef.current) return  // skip while manual search is active
+      try {
+        const data  = await authFetch(`${API}/deals`).then(r => r.json())
+        const fresh = data.deals || []
+        if (!fresh.length) return
+        const freshMs = new Date(fresh[0].sent_at).getTime()
+        if (freshMs > latestSentAtMs.current) {
+          latestSentAtMs.current = freshMs
+          setDeals(fresh)
+          localStorage.setItem(CACHE_KEY, JSON.stringify(fresh))
+        }
+      } catch { /* silent fail — no disruption to UI */ }
+    }, POLL_MS)
+    return () => clearInterval(id)
+  }, [authFetch])
 
   async function searchNow() {
     setRunning(true)
@@ -77,6 +103,7 @@ export default function DealsPage({ airportVersion = 0 }) {
         const fresh = await authFetch(`${API}/deals`).then(r => r.json()).then(d => d.deals || [])
         const latestSentAt = fresh[0] ? new Date(fresh[0].sent_at).getTime() : 0
         if (latestSentAt > triggeredAt) {
+          latestSentAtMs.current = new Date(fresh[0].sent_at).getTime()
           setDeals(fresh)
           localStorage.setItem(CACHE_KEY, JSON.stringify(fresh))
           const n = fresh.length
